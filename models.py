@@ -32,11 +32,6 @@ class Currency(Base):
     def get_name(self):
         return self.name
 
-    async def get_currency(self, code, session: AsyncSession = Depends(get_async_session)):
-        async with async_session_maker() as session:
-            query = await session.execute(select(self.__tablename__).where(self.c.code == code))
-            return await query.scalars().first().data
-
 
 index_currency_code = Index("ix_currency_code", Currency.code)
 

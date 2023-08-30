@@ -4,12 +4,7 @@ from datetime import datetime
 from sqlalchemy import Column, Index, Integer, DECIMAL, String
 from sqlalchemy.dialects.postgresql import TSRANGE
 
-from config.database import Base, async_session_maker
-
-from fastapi import Depends
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from config.database import get_async_session
+from config.database import Base
 
 from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_trigger import PGTrigger
@@ -23,10 +18,9 @@ class Currency(Base):
     code = Column(String(3), nullable=False)
     name = Column(String, nullable=False)
     value = Column(DECIMAL(20, 4), nullable=False)
-    period = Column(TSRANGE[datetime], nullable=True)
+    period = Column(TSRANGE[datetime])
 
-
-    def __repr__(self):
+    def __str__(self):
         return json.dumps(f'"id": {self.id}, "code": {self.code}, "name": {self.name}, "value": {self.value}, "period": {self.period}')
     
     def get_name(self):

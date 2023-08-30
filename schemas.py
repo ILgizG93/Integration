@@ -1,10 +1,11 @@
 from decimal import Decimal
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 class TunedModel(BaseModel):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class CurrencyBase(TunedModel):
@@ -14,8 +15,9 @@ class CurrencyBase(TunedModel):
 
 
 class CurrencyActual(CurrencyBase):
-    datetime: str
+    datetime_utc: str
 
 
 class CurrencyResult(CurrencyBase):
-    pass
+    period_begin: datetime | None
+    period_end: datetime | None

@@ -3,8 +3,8 @@ import models, schemas
 from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
-from config.database import engine, get_async_session
-from parsing import *
+from config.database import get_async_session
+from integration import *
 from decimal import *
 
 app = FastAPI()
@@ -34,41 +34,49 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 # Вывод записей из бд
-@app.get("/currency_values_all/?{offset}&{limit}")
-async def get_currencies(offset: int, limit: int, session: AsyncSession = Depends(get_async_session)):
-    result = await session.execute(select(models.Currency).offset(offset).limit(limit))
-    result = result.scalars().all()
-    if result:
-        return [schemas.CurrencyResult(**r.__dict__) for r in result]
-    else:
-        return {"result": "Данные отсутствуют."}
+@app.get("/currency_values_all/")
+async def get_currencies(offset: int = 0, limit: int = 10, session: AsyncSession = Depends(get_async_session)):
+    async with session.begin():
+        result = await session.execute(select(models.Currency).offset(offset).limit(limit).order_by(models.Currency.period.desc(), models.Currency.code))
+        result = result.scalars().all()
+        if result is None:
+            return {"result": "Данные отсутствуют."}
+        else:
+            return [schemas.CurrencyResult(**r.__dict__, period_begin=r.period.lower, period_end=r.period.upper) for r in result]
 
 
 # Вывод актуального курса по указанному коду (USD, EUR, CNY) из представления, сформированного в миграции
 @app.get("/currency_actual/{code}/")
 async def get_currencies(code: str, session: AsyncSession = Depends(get_async_session)):
-    sql = f"SELECT * FROM payments.v_currency where code in ('{code}')"
-    result = await session.execute(text(sql))
-    result = result.first()
-    if result:
-        return [schemas.CurrencyActual(datetime=result[0], code=result[1], name=result[2], value=result[3])]
-    else:
-        return {"result": "Данные по введённому коду отсутствуют."}
+    async with session.begin():
+        sql = f"SELECT * FROM payments.v_currency where code in ('{code}')"
+        result = await session.execute(text(sql))
+        result = result.first()
+        if result is None:
+            return {"result": "Данные по введённому курсу отсутствуют."}
+        else:
+            return [schemas.CurrencyActual(**result._mapping)]
 
 
-# Парсинг сайта ЦБ с последующим сохранением курсов в бд
+# Интеграция с ЦБ с последующим сохранением курсов в бд
 @app.post("/save_currency_values/")
 async def save_currencies(session: AsyncSession = Depends(get_async_session)):
     scrapper = CBSrapper(URL)
     data = scrapper.main()
+    result = []
     try:
-        session.begin()
-        for d in data:
-            value = round(Decimal(d["value"].replace(",", ".")),4)
-            await session.execute(insert(models.Currency).values(code=d["code"], name=d["name"], value=Decimal(value)))
-        await session.commit()
-        return {"result": "Данные обработаны."}
+        async with session.begin():
+            for d in data:
+                value = round(Decimal(d["value"].replace(",", ".")),4)
+                stmt = await session.execute(insert(models.Currency).values(code=d["code"], name=d["name"], value=Decimal(value)).returning(models.Currency))
+                if stmt.first() is None:
+                    result.append({d["code"]: "Данные актуальны"})
+                else:
+                    result.append(stmt.first()[0])
+            await session.commit()
+            return {"result": "Данные обработаны.", "detail": result}
     except Exception as err:
+        await session.rollback()
         return {"error": err}
 
 

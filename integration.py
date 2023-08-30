@@ -34,7 +34,7 @@ class CBSrapper:
             return {"error":err}
     
 
-    def parsing_data(self):
+    def export_data(self):
         list = []
         for item in self.get_xml().findall('.//Valute'):
             if item[1].text in self.CURRENCY_CODE:
@@ -44,7 +44,7 @@ class CBSrapper:
         return list
     
 
-    def parsing_data_with_pydantic(self):
+    def export_data_with_pydantic(self):
         list = []
         i = 0
         for item in self.get_xml().findall('.//Valute'):
@@ -60,7 +60,7 @@ class CBSrapper:
     
     
     def main(self):
-        data = self.parsing_data_with_pydantic()
+        data = self.export_data_with_pydantic()
         return data
 
 if __name__ == '__main__':
